@@ -129,10 +129,8 @@ var ucjs_ExternalEditor = {
     var windowManagerInterface = windowManager.QueryInterface(Components.interfaces.nsIWindowMediator);
     var enumerator = windowManagerInterface.getEnumerator(windowType);
     if (enumerator.hasMoreElements()) return;
-    var file = Components.classes["@mozilla.org/file/local;1"]
-                         .createInstance(Components.interfaces.nsILocalFile);
-    file.initWithPath(this._tmpdir);
-    var entries = file.directoryEntries;
+
+    var entries = this._tmpdir.directoryEntries;
     while (entries.hasMoreElements()){
       var entry = entries.getNext().QueryInterface(Components.interfaces.nsIFile);
       if (/^ucjs.textarea\./i.test(entry.leafName)){
@@ -143,7 +141,7 @@ var ucjs_ExternalEditor = {
     }
 
     try{
-      if( file.exists() == true ) file.remove(false);
+      if( this._tmpdir.exists() == true ) this._tmpdir.remove(false);
     }catch(e){}
     this._tmpdir = null;
   },
@@ -325,97 +323,35 @@ var ucjs_ExternalEditor = {
 
       return true;
   },
- 
+
   //Compose temporary filename
   TmpFilenameTextarea: function(strURL,strName){
-    /**
-     * Creates a mostly unique hash of a string
-     * Most of this code is from:
-     *    http://developer.mozilla.org/en/docs/nsICryptoHash
-     * @param {String} some_string The string to hash.
-     * @returns {String} a hashed string.
-     */
-    function hashString(some_string) {
-      var converter = Components.classes["@mozilla.org/intl/scriptableunicodeconverter"].createInstance(Components.interfaces.nsIScriptableUnicodeConverter);
-      converter.charset = "UTF-8";
-
-      /* result is the result of the hashing.  It's not yet a string,
-       * that'll be in retval.
-       * result.value will contain the array length
-       */
-      var result = {};
-      
-      /* data is an array of bytes */
-      var data = converter.convertToByteArray(some_string, result);
-      var ch   = Components.classes["@mozilla.org/security/hash;1"].createInstance(Components.interfaces.nsICryptoHash);
-      
-      ch.init(ch.MD5);
-      ch.update(data, data.length);
-      var hash = ch.finish(true);
-      
-      // return the two-digit hexadecimal code for a byte
-      var toHexString = function(charCode) {
-        return ("0" + charCode.toString(36)).slice(-2);
-      };
-      // convert the binary hash data to a hex string.
-      var retval = [];
-      for(i in hash) 
-        retval[i] = toHexString(hash.charCodeAt(i));
-      return(retval.join(""));
-    }
-    
-    //乱数アルゴリズム参考:http://www.sm.rim.or.jp/~shishido/pie.html Math.random()の代わり
-    /*メソッド一覧
-    random()       :0以上1未満の実数の乱数を生成します。Math.random()と同様に使用できます。
-    randomi(arg)   :0以上arg未満の整数の乱数を生成します。
-    srand(arg)     :乱数の種を初期化します。引数を指定しない場合は現在時刻から種を生成します。
-                    引数argを指定するとargが種になる。
-    Randomize(arg) :Randomizeオブジェクトを生成するコンストラクタメソッド。
-                    Randomizeオブジェクトを生成し、srandを呼び出して乱数の種を初期化します。
-                    引数argを指定するとsrandに渡します。*/
-    function Randomize(seed) {
-      this.srand=function(seed) {
-        tmpdt=new Date();
-        this.seed=this.srand.arguments.length ? seed : tmpdt.getSeconds()*1000+tmpdt.getMilliseconds();
-      }
-      this.random=function() {
-        this.seed=(this.seed*2061+7)%65536;
-        return this.seed/65536;
-      }
-      this.randomi=function(range) {
-        return Math.floor(this.random()*range*10)%range;
-      }
-      Randomize.arguments.length ? this.srand(seed) : this.srand();
-    }
-    
-    // Randomizeオブジェクト生成
-    var rnd=new Randomize(); // 引数なし→乱数の種は現在時刻から
-    
-    var TmpFilename;
-    this._tmpdir = this.gettmpDir();
+    var tmpFile = null;
+    this._tmpdir = this.gettmpDirInstance();
     do{
-        TmpFilename = this._tmpdir + this._dir_separator + "ucjs.textarea." + hashString(strURL) + '_' +
-                      strName + '_' + rnd.randomi(100000) + "." + this._ext;
-    }while(!this.ExistsFile(TmpFilename))
-    return TmpFilename;
+        var tmpFileLeafName = this.getTmpFileName(strURL, strName);
+        tmpFile = this._tmpdir.clone();
+        tmpFile.append(tmpFileLeafName);
+    }while(tmpFile.exists())
+    return tmpFile.path;
   },
-  
-//Function returns true if given filename exists
-  ExistsFile: function(filename){
-    try{
-      var file = Components.classes["@mozilla.org/file/local;1"].
-                 createInstance(Components.interfaces.nsILocalFile);
-      file.initWithPath(filename);
-      return true;
-    }catch(e){
-      return false;
-    }
+
+  getTmpFileName: function(strURL, strName) {
+    return "ucjs.textarea." + this.getUUID() + "." + this._ext;
+  },
+
+  getUUID: function() {
+    var uuidGenerator = Components.classes["@mozilla.org/uuid-generator;1"]
+          .getService(Components.interfaces.nsIUUIDGenerator);
+    var uuid = uuidGenerator.generateUUID();
+    var uuidString = uuid.toString();
+    return uuidString.replace(/-|{|}/g, "");
   },
 /**
 * Returns the directory where we put files to edit.
 * @returns nsILocalFile The location where we should write editable files.
 */
-  gettmpDir: function() {
+  gettmpDirInstance: function() {
     /* Where is the directory that we use. */
     var fobj = util.getSpecialDir("TmpD");
     fobj.append('Temp_ExternalEditor');
@@ -426,7 +362,10 @@ var ucjs_ExternalEditor = {
     if (!fobj.isDirectory()) {
       alert('Having a problem finding or creating directory: '+fobj.path);
     }
-    return fobj.path;
+    return fobj;
+  },
+  gettmpDir: function() {
+    return this.gettmpDirInstance().path;
   }
 
 };
