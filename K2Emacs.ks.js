@@ -417,9 +417,7 @@ var ucjs_ExternalEditor = {
 */
   gettmpDir: function() {
     /* Where is the directory that we use. */
-    var fobj = Components.classes["@mozilla.org/file/directory_service;1"].
-      getService(Components.interfaces.nsIProperties).
-      get("ProfD", Components.interfaces.nsIFile);
+    var fobj = util.getSpecialDir("TmpD");
     fobj.append('Temp_ExternalEditor');
     if (!fobj.exists()) {
       fobj.create(Components.interfaces.nsIFile.DIRECTORY_TYPE,
